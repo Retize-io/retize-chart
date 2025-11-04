@@ -24,7 +24,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Determine version
+      - name: Determine version and generate changelog
         id: version
         run: |
           if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ inputs.version }}" ]; then
@@ -32,6 +32,7 @@ jobs:
             VERSION="${{ inputs.version }}"
             echo "version=${VERSION}" >> $GITHUB_OUTPUT
             echo "manual_version=true" >> $GITHUB_OUTPUT
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~1")
           else
             # Auto-detect version from conventional commits
             LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
@@ -79,6 +80,12 @@ jobs:
             echo "manual_version=false" >> $GITHUB_OUTPUT
           fi
 
+          # Generate changelog from commits
+          CHANGELOG=$(git log ${LATEST_TAG}..HEAD --pretty=format:"- %s (%an)" 2>/dev/null || echo "- No commits since last release")
+          # Escape newlines for GitHub Actions
+          CHANGELOG="${CHANGELOG//$'\n'/'%0A'}"
+          echo "changelog=${CHANGELOG}" >> $GITHUB_OUTPUT
+
       - name: Check if version exists
         id: check_tag
         if: steps.version.outputs.version != ''
@@ -113,11 +120,24 @@ jobs:
           git push origin main
           git push origin "v${{ steps.version.outputs.version }}"
 
+      - name: Set up Helm
+        uses: azure/setup-helm@v3
+
       - name: Package Helm chart
         if: steps.version.outputs.version != '' && steps.check_tag.outputs.exists == 'false'
         run: |
           mkdir -p dist
           helm package app --destination dist --version ${{ steps.version.outputs.version }}
+
+      - name: Login to GitHub Container Registry
+        if: steps.version.outputs.version != '' && steps.check_tag.outputs.exists == 'false'
+        run: |
+          echo ${{ secrets.GITHUB_TOKEN }} | helm registry login ghcr.io -u $ --password-stdin
+
+      - name: Push Helm chart to GHCR
+        if: steps.version.outputs.version != '' && steps.check_tag.outputs.exists == 'false'
+        run: |
+          helm push dist/retize-chart-${{ steps.version.outputs.version }}.tgz oci://ghcr.io/${{ github.repository_owner }}/helm-charts
 
       - name: Create GitHub Release
         if: steps.version.outputs.version != '' && steps.check_tag.outputs.exists == 'false'
@@ -131,20 +151,22 @@ jobs:
 
             **Version:** ${{ steps.version.outputs.version }}
 
+            ### Changes
+
+            ${{ steps.version.outputs.changelog }}
+
             ### Installation
 
+            From GHCR:
             ```bash
-            helm repo add retize-chart https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}
-            helm install my-release retize-chart/retize-chart --version ${{ steps.version.outputs.version }}
+            helm registry login ghcr.io -u <username> -p <token>
+            helm install my-release oci://ghcr.io/${{ github.repository_owner }}/helm-charts/retize-chart --version ${{ steps.version.outputs.version }}
             ```
 
-            Or directly:
-
+            Or from release package:
             ```bash
             helm install my-release https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/retize-chart-${{ steps.version.outputs.version }}.tgz
             ```
-
-            See commit history for details.
           draft: false
           prerelease: false
         env:
