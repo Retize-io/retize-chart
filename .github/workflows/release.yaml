@@ -1,0 +1,161 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (semver format, e.g., 1.0.0). Leave empty for auto-detect.'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ inputs.version }}" ]; then
+            # Manual release with specified version
+            VERSION="${{ inputs.version }}"
+            echo "version=${VERSION}" >> $GITHUB_OUTPUT
+            echo "manual_version=true" >> $GITHUB_OUTPUT
+          else
+            # Auto-detect version from conventional commits
+            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+            LATEST_VERSION=${LATEST_TAG#v}
+
+            # Get commits since last tag
+            COMMITS=$(git log ${LATEST_TAG}..HEAD --pretty=format:"%s" 2>/dev/null || git log --pretty=format:"%s")
+
+            # Parse conventional commits
+            HAS_BREAKING=false
+            HAS_FEATURE=false
+            HAS_FIX=false
+
+            while IFS= read -r commit; do
+              if [[ $commit == *"BREAKING CHANGE"* ]]; then
+                HAS_BREAKING=true
+              elif [[ $commit == feat* ]]; then
+                HAS_FEATURE=true
+              elif [[ $commit == fix* ]]; then
+                HAS_FIX=true
+              fi
+            done <<< "$COMMITS"
+
+            # Calculate new version
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$LATEST_VERSION"
+
+            if [ "$HAS_BREAKING" == "true" ]; then
+              MAJOR=$((MAJOR + 1))
+              MINOR=0
+              PATCH=0
+            elif [ "$HAS_FEATURE" == "true" ]; then
+              MINOR=$((MINOR + 1))
+              PATCH=0
+            elif [ "$HAS_FIX" == "true" ]; then
+              PATCH=$((PATCH + 1))
+            else
+              # No relevant commits, no version bump
+              echo "version=" >> $GITHUB_OUTPUT
+              echo "No changes requiring a release"
+              exit 0
+            fi
+
+            VERSION="${MAJOR}.${MINOR}.${PATCH}"
+            echo "version=${VERSION}" >> $GITHUB_OUTPUT
+            echo "manual_version=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check if version exists
+        id: check_tag
+        if: steps.version.outputs.version != ''
+        run: |
+          if git rev-parse "v${{ steps.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update Chart.yaml
+        if: steps.version.outputs.version != '' && steps.check_tag.outputs.exists == 'false'
+        run: |
+          # Update version in Chart.yaml
+          sed -i "s/^version: .*/version: ${{ steps.version.outputs.version }}/" app/Chart.yaml
+
+          # Update appVersion if needed (match chart version)
+          sed -i "s/^appVersion: .*/appVersion: \"${{ steps.version.outputs.version }}\"/" app/Chart.yaml
+
+      - name: Commit and tag
+        if: steps.version.outputs.version != '' && steps.check_tag.outputs.exists == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add app/Chart.yaml
+          git commit -m "chore: release v${{ steps.version.outputs.version }}" || true
+          git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}" || true
+
+      - name: Push changes
+        if: steps.version.outputs.version != '' && steps.check_tag.outputs.exists == 'false'
+        run: |
+          git push origin main
+          git push origin "v${{ steps.version.outputs.version }}"
+
+      - name: Package Helm chart
+        if: steps.version.outputs.version != '' && steps.check_tag.outputs.exists == 'false'
+        run: |
+          mkdir -p dist
+          helm package app --destination dist --version ${{ steps.version.outputs.version }}
+
+      - name: Create GitHub Release
+        if: steps.version.outputs.version != '' && steps.check_tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Release v${{ steps.version.outputs.version }}
+          files: dist/*.tgz
+          body: |
+            ## Helm Chart Release
+
+            **Version:** ${{ steps.version.outputs.version }}
+
+            ### Installation
+
+            ```bash
+            helm repo add retize-chart https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}
+            helm install my-release retize-chart/retize-chart --version ${{ steps.version.outputs.version }}
+            ```
+
+            Or directly:
+
+            ```bash
+            helm install my-release https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/retize-chart-${{ steps.version.outputs.version }}.tgz
+            ```
+
+            See commit history for details.
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Release already exists
+        if: steps.version.outputs.version != '' && steps.check_tag.outputs.exists == 'true'
+        run: |
+          echo "Release v${{ steps.version.outputs.version }} already exists, skipping..."
+
+      - name: No changes for release
+        if: steps.version.outputs.version == ''
+        run: |
+          echo "No changes requiring a version bump"
