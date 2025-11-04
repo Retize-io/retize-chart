@@ -1,0 +1,21 @@
+# Minimal deployment with everything disabled except essentials
+image:
+  repository: your-app
+  tag: "latest"
+  registryType: dockerhub
+
+service:
+  enabled: false  # No service needed
+  containerPort: 8080
+
+ingressRoute:
+  enabled: false  # No ingress needed
+
+workloadIdentity:
+  enabled: false  # No workload identity needed
+
+externalSecrets:
+  enabled: false  # No secrets needed
+
+# No env vars needed
+env: {}

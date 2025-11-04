@@ -1,0 +1,52 @@
+# GHCR deployment with external secrets
+image:
+  repository: ghcr.io/your-org/your-app
+  tag: "v1.0.0"
+  registryType: ghcr
+
+service:
+  port: 8080
+  containerPort: 8080
+
+ingressRoute:
+  host: your-app.example.com
+
+# HPA instead of fixed replicas
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+
+# Resource limits
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 200m
+    memory: 256Mi
+
+# All env vars go in ConfigMap automatically
+env:
+  NODE_ENV: production
+  API_URL: https://api.example.com
+  LOG_LEVEL: info
+
+# Reference existing secrets
+envFromSecrets:
+  - my-app-database-secrets
+
+# Individual secret keys to env vars
+envFromSecretKeys:
+  - name: DATABASE_URL
+    secretName: db-credentials
+    key: url
+
+# Simplified external secrets
+externalSecrets:
+  enabled: true
+  secrets:
+    - name: ghcr-auth-secret
+      key: ghcr-credentials
+      type: dockerconfigjson

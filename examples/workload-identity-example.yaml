@@ -1,0 +1,40 @@
+# Workload Identity example - no GOOGLE_APPLICATION_CREDENTIALS needed
+image:
+  repository: us-central1-docker.pkg.dev/your-project/your-repo/gcp-app
+  tag: "v1.0.0"
+  registryType: artifact-registry
+
+service:
+  port: 8080
+  containerPort: 8080
+
+workloadIdentity:
+  enabled: true
+  serviceAccountName: my-gcp-app-sa
+  projectId: your-gcp-project
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 15
+  targetCPUUtilizationPercentage: 75
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+env:
+  NODE_ENV: production
+  GCP_PROJECT_ID: your-gcp-project
+  # No GOOGLE_APPLICATION_CREDENTIALS needed - workload identity handles it automatically
+
+envFromSecrets:
+  - app-database-secrets
+
+# No external secrets needed for image pull - workload identity handles it
+externalSecrets:
+  enabled: false

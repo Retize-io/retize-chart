@@ -1,0 +1,5 @@
+apiVersion: v2
+name: retize-chart
+version: 1.0.0
+description: Retize Default App Chart
+appVersion: "0.0.1"

@@ -1,0 +1,15 @@
+{{- if .Values.ingressRoute.tls.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "app.fullname" . }}-tls
+  namespace: {{ .Release.Namespace }}
+spec:
+  secretName: {{ include "app.fullname" . }}-tls
+  commonName: {{ .Values.ingressRoute.host }}
+  dnsNames:
+    - {{ .Values.ingressRoute.host }}
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+{{- end }}

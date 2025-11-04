@@ -1,0 +1,77 @@
+# Global settings
+enabled: true
+replicaCount: 1
+
+# Image configuration
+image:
+  repository: ghcr.io/retize-io/retize-redirect
+  tag: "1.1.0-lusa"
+  pullPolicy: IfNotPresent
+  registryType: ghcr  # ghcr, artifact-registry, dockerhub
+
+# Service configuration
+service:
+  enabled: true
+  type: ClusterIP
+  port: 3000
+  containerPort: 8000
+
+# Ingress configuration
+ingressRoute:
+  enabled: true
+  entryPoints:
+    - websecure
+  host: lusa.campanhas.retize.io
+  tls:
+    enabled: true
+    certResolver: letsencrypt-prod
+
+# HPA configuration
+hpa:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+# Resource limits and requests
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# Workload Identity
+workloadIdentity:
+  enabled: false
+  serviceAccountName: ""
+  projectId: ""
+
+# Environment variables (will be put in ConfigMap)
+env:
+  PROJECT_ID: retize-prod
+  NODE_ENV: production
+  REDIRECT__TRANSMISSAO__CSF: https://www.cartaoatacadao.com.br/faca-seu-cartao-atacadao/?utm_source=afiliados&utm_medium=retize&utm_campaign=transmissao-serie-d-portuguesa&utm_content=personalizado-L-transmissao
+
+# Environment from secrets (reference existing secrets)
+envFromSecrets: []
+  # - secret-name
+
+# Individual secret values to env vars
+envFromSecretKeys: []
+  # - name: DATABASE_URL
+  #   secretName: db-credentials
+  #   key: url
+
+# External Secrets (simplified)
+externalSecrets:
+  enabled: true
+  secretStore: gcp-secrets
+  secrets:
+    - name: ghcr-auth-secret
+      key: ghcr-credentials
+      type: dockerconfigjson
+    # - name: app-secrets
+    #   key: app-config
