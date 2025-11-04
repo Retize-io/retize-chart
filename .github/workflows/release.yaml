@@ -137,7 +137,7 @@ jobs:
       - name: Push Helm chart to GHCR
         if: steps.version.outputs.version != '' && steps.check_tag.outputs.exists == 'false'
         run: |
-          helm push dist/retize-chart-${{ steps.version.outputs.version }}.tgz oci://ghcr.io/${{ github.repository_owner }}/helm-charts
+          helm push dist/retize-chart-${{ steps.version.outputs.version }}.tgz oci://ghcr.io/${{ github.repository_owner | lower }}/helm-charts/retize-chart
 
       - name: Create GitHub Release
         if: steps.version.outputs.version != '' && steps.check_tag.outputs.exists == 'false'
@@ -160,7 +160,7 @@ jobs:
             From GHCR:
             ```bash
             helm registry login ghcr.io -u <username> -p <token>
-            helm install my-release oci://ghcr.io/${{ github.repository_owner }}/helm-charts/retize-chart --version ${{ steps.version.outputs.version }}
+            helm install my-release oci://ghcr.io/${{ github.repository_owner | lower }}/helm-charts/retize-chart --version ${{ steps.version.outputs.version }}
             ```
 
             Or from release package:
