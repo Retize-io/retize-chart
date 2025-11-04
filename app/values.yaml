@@ -5,7 +5,7 @@ replicaCount: 1
 # Image configuration
 image:
   repository: ghcr.io/retize-io/retize-redirect
-  tag: "1.1.0-lusa"
+  tag: "1.1.0"
   pullPolicy: IfNotPresent
   registryType: ghcr  # ghcr, artifact-registry, dockerhub
 
@@ -21,7 +21,7 @@ ingressRoute:
   enabled: true
   entryPoints:
     - websecure
-  host: lusa.campanhas.retize.io
+  host: redirect.campanhas.retize.io
   tls:
     enabled: true
     certResolver: letsencrypt-prod
@@ -53,8 +53,6 @@ workloadIdentity:
 env:
   PROJECT_ID: retize-prod
   NODE_ENV: production
-  REDIRECT__TRANSMISSAO__CSF: https://www.cartaoatacadao.com.br/faca-seu-cartao-atacadao/?utm_source=afiliados&utm_medium=retize&utm_campaign=transmissao-serie-d-portuguesa&utm_content=personalizado-L-transmissao
-
 # Environment from secrets (reference existing secrets)
 envFromSecrets: []
   # - secret-name
