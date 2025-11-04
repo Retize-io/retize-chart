@@ -35,16 +35,33 @@ jobs:
       - name: Determine version and generate changelog
         id: version
         run: |
+          VERSION=""
+          LATEST_TAG=""
+
+          # Try to extract version from PR title first (if PR closed)
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            PR_TITLE="${{ github.event.pull_request.title }}"
+            # Extract version pattern like "v1.2.0" or "1.2.0" from PR title
+            VERSION=$(echo "$PR_TITLE" | grep -oP 'v?\K\d+\.\d+\.\d+' | head -1)
+            if [ -n "$VERSION" ]; then
+              echo "version=${VERSION}" >> $GITHUB_OUTPUT
+              echo "pr_version=true" >> $GITHUB_OUTPUT
+              exit 0
+            fi
+          fi
+
+          # Manual release with specified version
           if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ inputs.version }}" ]; then
-            # Manual release with specified version
             VERSION="${{ inputs.version }}"
             echo "version=${VERSION}" >> $GITHUB_OUTPUT
             echo "manual_version=true" >> $GITHUB_OUTPUT
             LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~1")
-          else
-            # Auto-detect version from conventional commits
-            LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-            LATEST_VERSION=${LATEST_TAG#v}
+            exit 0
+          fi
+
+          # Auto-detect version from conventional commits
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+          LATEST_VERSION=${LATEST_TAG#v}
 
             # Get commits since last tag
             COMMITS=$(git log ${LATEST_TAG}..HEAD --pretty=format:"%s" 2>/dev/null || git log --pretty=format:"%s")
