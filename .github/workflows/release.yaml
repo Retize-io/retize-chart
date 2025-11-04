@@ -1,13 +1,15 @@
 name: Release
 
 on:
-  push:
+  pull_request:
+    types:
+      - closed
     branches:
       - main
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release (semver format, e.g., 1.0.0). Leave empty for auto-detect.'
+        description: "Version to release (semver format, e.g., 1.0.0). Leave empty for auto-detect."
         required: false
         type: string
 
@@ -18,11 +20,17 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event.pull_request.merged == true && github.event.action == 'closed')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Set lowercase owner
+        id: lowercase
+        run: |
+          echo "owner=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
       - name: Determine version and generate changelog
         id: version
@@ -137,7 +145,7 @@ jobs:
       - name: Push Helm chart to GHCR
         if: steps.version.outputs.version != '' && steps.check_tag.outputs.exists == 'false'
         run: |
-          helm push dist/retize-chart-${{ steps.version.outputs.version }}.tgz oci://ghcr.io/${{ github.repository_owner | lower }}/helm-charts/retize-chart
+          helm push dist/retize-chart-${{ steps.version.outputs.version }}.tgz oci://ghcr.io/${{ steps.lowercase.outputs.owner }}/helm-charts/retize-chart
 
       - name: Create GitHub Release
         if: steps.version.outputs.version != '' && steps.check_tag.outputs.exists == 'false'
@@ -160,7 +168,7 @@ jobs:
             From GHCR:
             ```bash
             helm registry login ghcr.io -u <username> -p <token>
-            helm install my-release oci://ghcr.io/${{ github.repository_owner | lower }}/helm-charts/retize-chart --version ${{ steps.version.outputs.version }}
+            helm install my-release oci://ghcr.io/${{ steps.lowercase.outputs.owner }}/helm-charts/retize-chart --version ${{ steps.version.outputs.version }}
             ```
 
             Or from release package:
